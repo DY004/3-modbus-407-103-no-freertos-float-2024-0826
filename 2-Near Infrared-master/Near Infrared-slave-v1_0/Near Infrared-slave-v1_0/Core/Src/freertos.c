@@ -1,0 +1,482 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * File Name          : freertos.c
+  * Description        : Code for freertos applications
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2024 STMicroelectronics.
+  * All rights reserved.
+  *
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
+  *
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "FreeRTOS.h"
+#include "task.h"
+#include "main.h"
+#include "cmsis_os.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "menu.h"
+#include "delay.h"
+#include "matrix_key.h"
+#include "modbus.h"
+#include "usart.h"
+#include "Float_To_U32.h"
+
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN Variables */
+
+/* USER CODE END Variables */
+osThreadId LED_TaskHandle;
+osThreadId menu_TaskHandle;
+osThreadId modbus_TaskHandle;
+osThreadId keyboard_scanHandle;
+osThreadId pump_TaskHandle;
+osThreadId ConvertFloat_TaHandle;
+
+/* Private function prototypes -----------------------------------------------*/
+/* USER CODE BEGIN FunctionPrototypes */
+
+/* USER CODE END FunctionPrototypes */
+
+void Start_LED_Task(void const * argument);
+void Start_menu_Task(void const * argument);
+void Start_modbus_Task(void const * argument);
+void Start_keyboard_scan(void const * argument);
+void Start_pump_Task(void const * argument);
+void Start_ConvertFloat_Task(void const * argument);
+
+void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
+
+/* GetIdleTaskMemory prototype (linked to static allocation support) */
+void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize );
+
+/* USER CODE BEGIN GET_IDLE_TASK_MEMORY */
+static StaticTask_t xIdleTaskTCBBuffer;
+static StackType_t xIdleStack[configMINIMAL_STACK_SIZE];
+
+void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize )
+{
+    *ppxIdleTaskTCBBuffer = &xIdleTaskTCBBuffer;
+    *ppxIdleTaskStackBuffer = &xIdleStack[0];
+    *pulIdleTaskStackSize = configMINIMAL_STACK_SIZE;
+    /* place for user code */
+}
+/* USER CODE END GET_IDLE_TASK_MEMORY */
+
+/**
+  * @brief  FreeRTOS initialization
+  * @param  None
+  * @retval None
+  */
+void MX_FREERTOS_Init(void) {
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+    /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+    /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+    /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+    /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of LED_Task */
+  osThreadDef(LED_Task, Start_LED_Task, osPriorityIdle, 0, 128);
+  LED_TaskHandle = osThreadCreate(osThread(LED_Task), NULL);
+
+  /* definition and creation of menu_Task */
+  osThreadDef(menu_Task, Start_menu_Task, osPriorityIdle, 0, 128);
+  menu_TaskHandle = osThreadCreate(osThread(menu_Task), NULL);
+
+  /* definition and creation of modbus_Task */
+  osThreadDef(modbus_Task, Start_modbus_Task, osPriorityIdle, 0, 128);
+  modbus_TaskHandle = osThreadCreate(osThread(modbus_Task), NULL);
+
+  /* definition and creation of keyboard_scan */
+  osThreadDef(keyboard_scan, Start_keyboard_scan, osPriorityIdle, 0, 128);
+  keyboard_scanHandle = osThreadCreate(osThread(keyboard_scan), NULL);
+
+  /* definition and creation of pump_Task */
+  osThreadDef(pump_Task, Start_pump_Task, osPriorityIdle, 0, 128);
+  pump_TaskHandle = osThreadCreate(osThread(pump_Task), NULL);
+
+  /* definition and creation of ConvertFloat_Ta */
+  osThreadDef(ConvertFloat_Ta, Start_ConvertFloat_Task, osPriorityIdle, 0, 128);
+  ConvertFloat_TaHandle = osThreadCreate(osThread(ConvertFloat_Ta), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+    /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+}
+
+/* USER CODE BEGIN Header_Start_LED_Task */
+/**
+  * @brief  Function implementing the LED_Task thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_Start_LED_Task */
+void Start_LED_Task(void const * argument)
+{
+  /* USER CODE BEGIN Start_LED_Task */
+    /* Infinite loop */
+    int rx_value = 0;
+    for(;;)
+    {
+//	  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin);
+//	  printf("(int)modbus.rcbuf[4+i]；%#x\n",(int)modbus.rcbuf[4+2]);
+//	  printf("(int)modbus.rcbuf[4+i]；%d\n",(int)modbus.rcbuf[4]);
+//	  printf("此刻modbus.Host_Sendtime的值是；%d\r\n",modbus.Host_Sendtime);
+//	  printf("modbus.recount的值；%d",modbus.recount);
+//	  printf("这是一个测试性实验\r\n");
+
+        /***查看液位传感器的状态，是否是实时性***/
+        if(modbus.Host_End)
+        {
+            rx_value = (int)modbus.rcbuf[4+0]+((int)modbus.rcbuf[3+0])*256;
+            if(rx_value == 16)
+            {
+                HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_RESET);
+            }
+            else if(rx_value == 9)
+            {
+                HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_SET);
+            }
+        }
+
+//	osDelay(200);
+
+
+
+
+    }
+  /* USER CODE END Start_LED_Task */
+}
+
+/* USER CODE BEGIN Header_Start_menu_Task */
+/**
+* @brief Function implementing the menu_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Start_menu_Task */
+void Start_menu_Task(void const * argument)
+{
+  /* USER CODE BEGIN Start_menu_Task */
+    /* Infinite loop */
+//  uint16_t key_value;
+    for(;;)
+    {
+//	  key_value = keyboard_scan();
+//	  printf("你按下的按键是：%d\r\n",key_value);
+//	  if(key_value == 1)
+//	  {
+//		  HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_RESET);
+////	  osDelay(500);
+//	  }
+//	  else if(key_value == 2)
+//	  {
+//		  HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,LED_GREEN_Pin,GPIO_PIN_SET);
+//	  }
+        Menu_key_set();
+        osDelay(20);
+    }
+  /* USER CODE END Start_menu_Task */
+}
+
+/* USER CODE BEGIN Header_Start_modbus_Task */
+/**
+* @brief Function implementing the modbus_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Start_modbus_Task */
+void Start_modbus_Task(void const * argument)
+{
+  /* USER CODE BEGIN Start_modbus_Task */
+    /* Infinite loop */
+//	uint8_t key1 = 0;
+    for(;;)
+    {
+//	  if(modbus.Host_time_flag)//每1s发送一次数据
+//        {
+//			printf("Host_time_flag的数值是: %d\r\n",modbus.Host_time_flag);
+//            //01-读取从机数据测试
+//            //参数1：查看第i个从机数据
+//            Host_Read03_slave(0x01,0x0000,0x0003);//参数1从机地址，参数2起始地址，参数3寄存器个数
+//            if(modbus.Host_send_flag)
+//            {
+//                modbus.Host_Sendtime=0;//发送完毕后计数清零（距离上次的时间）
+//                modbus.Host_time_flag=0;//发送数据标志位清零
+//                modbus.Host_send_flag=0;//清空发送结束数据标志位
+//                HOST_ModbusRX();//接收数据进行处理
+//            }
+        //02-写入数据测试
+//					Host_write06_slave(0x01,0x06,0x0002,0x0045);
+//					if(modbus.Host_send_flag)
+//					{
+//						modbus.Host_Sendtime=0;//发送完毕后计数清零（距离上次的时间）
+//						modbus.Host_time_flag=0;//发送数据标志位清零
+//						modbus.Host_send_flag=0;//清空发送结束数据标志位
+//						Host_Func6();//从机返回数据处理
+//					}
+        //03-写入多个数据测试-作为主机使用
+//			Host_write10_slave(0x01,0x10,0x0001,0x0002,0x04,0x0102,0x0305);
+////			Host_write06_slave(0x01,0x06,0x0001,0x0045);
+//			if(modbus.Host_send_flag)
+//			{
+//				modbus.Host_Sendtime=0;//发送完毕后计数清零（距离上次的时间）
+//				modbus.Host_time_flag=0;//发送数据标志位清零
+//				modbus.Host_send_flag=0;//清空发送结束数据标志位
+//				Host_Func10();//从机返回数据处理
+//			}
+        //4-作为从机使用
+//			Modbus_Event();//本机作为从机使用时
+//        }
+//		osDelay(1000);
+
+        /***1S的时间内执行数据的读取和写入的实验实验***/
+//		for(int i = 0;i<150;i++)
+//		{
+//			if(i >46 && i <50)
+//			{
+//				if(key_status == 2)
+//				{
+//					Host_write06_slave(0x01,0x06,0x0002,0x0045);
+//					Host_Func6();//从机返回数据处理
+//				}
+//				if(key_status == 1)
+//				{
+//					Host_write06_slave(0x01,0x06,0x0002,0x0050);
+//					Host_Func6();//从机返回数据处理
+//				}
+////					Host_write06_slave(0x01,0x06,0x0002,0x0050);
+////					Host_Func6();//从机返回数据处理
+//			}
+//
+//			if(i >148 && i <150 )
+//			{
+//				Host_Read03_slave(0x01,0x0000,0x0001);
+//				HOST_ModbusRX();
+//			}
+//		}
+        if(modbus.Host_time_flag)//每1s发送一次数据
+        {
+            Host_Read03_slave(0x01,0x0000,0x0004);
+            if(modbus.Host_send_flag_03)
+            {
+                modbus.Host_Sendtime = 0;
+                modbus.Host_time_flag = 0;
+                modbus.Host_send_flag_03 = 0;
+                HOST_ModbusRX();
+            }
+        }
+//		if(modbus.Host_time_flag_06)
+//		{
+//			Host_write06_slave(0x01,0x06,0x0002,0x0033);//参数1从机地址，参数2起始地址，参数3寄存器个数,功能函数的末尾带了一个发送完毕的标志位置1的语句。
+//			if(modbus.Host_send_flag_06)
+//			{
+//				modbus.Host_Sendtime_06 = 0;//发送完毕后计数清零（距离上次的时间）
+//				modbus.Host_time_flag_06 = 0;//发送数据标志位清零
+//				modbus.Host_send_flag_06 = 0;//清空发送结束数据标志位
+//				Host_Func6();//从机返回数据处理
+//			}
+//		}
+
+//			osDelay(3000);
+//
+//
+////			//02-写入数据测试
+//			Host_write06_slave(0x01,0x06,0x0002,0x0045);
+////			if(modbus.Host_send_flag)
+////			{
+//////				modbus.Host_Sendtime=0;//发送完毕后计数清零（距离上次的时间）
+//////				modbus.Host_time_flag=0;//发送数据标志位清零
+//////				modbus.Host_send_flag=0;//清空发送结束数据标志位
+////				Host_Func6();//从机返回数据处理
+////			}
+//			osDelay(4000);
+//			modbus.Host_time_flag=0;//发送数据标志位清零
+
+        /***2S的时间内执行数据的读取和写入轮询的实验实验***/
+//			value++;
+//			if(modbus.Host_time_flag)//每2s执行读取和写入轮询，1s读取，1S写入
+//			{
+//
+//				if(value  == 1)
+//				{
+//					 Host_Read03_slave(0x01,0x0000,0x0001);//参数1从机地址，参数2起始地址，参数3寄存器个数
+//					if(modbus.Host_send_flag_03)
+//					{
+////						modbus.Host_Sendtime=0;//发送完毕后计数清零（距离上次的时间）
+////						modbus.Host_time_flag=0;//发送数据标志位清零
+//	//					modbus.Host_send_flag_03=0;//清空发送结束数据标志位
+//						HOST_ModbusRX();//接收数据进行处理
+//					}
+//				}
+//				else if(value  == 200)
+//				{
+//					Host_write06_slave(0x01,0x06,0x0002,0x0045);
+//					if(modbus.Host_send_flag_06)
+//					{
+//	//					modbus.Host_Sendtime=0;//发送完毕后计数清零（距离上次的时间）
+//	//					modbus.Host_time_flag=0;//发送数据标志位清零
+////						modbus.Host_send_flag_06=0;//清空发送结束数据标志位
+//						Host_Func6();//从机返回数据处理
+//					}
+//					value = 0;
+//				}
+//			}
+
+    }
+  /* USER CODE END Start_modbus_Task */
+}
+
+/* USER CODE BEGIN Header_Start_keyboard_scan */
+/**
+* @brief Function implementing the keyboard_scan thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Start_keyboard_scan */
+void Start_keyboard_scan(void const * argument)
+{
+  /* USER CODE BEGIN Start_keyboard_scan */
+    /* Infinite loop */
+    int key_123;
+    int i = 0;
+    for(;;)
+    {
+        key_123 = keyboard_scan();
+        if(key_123 == 16)
+        {
+            i++;
+            if(i == 1)
+            {
+                Host_write06_slave(0x01,0x06,0x0002,0x0045);
+                Host_Func6();//从机返回数据处理
+            }
+            else if(i == 2)//自加+1的表现
+            {
+                Host_write06_slave(0x01,0x06,0x0002,0x0050);
+                Host_Func6();//从机返回数据处理
+                i = 0;
+            }
+        }
+        osDelay(20);
+    }
+  /* USER CODE END Start_keyboard_scan */
+}
+
+/* USER CODE BEGIN Header_Start_pump_Task */
+/**
+* @brief Function implementing the pump_Task thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Start_pump_Task */
+void Start_pump_Task(void const * argument)
+{
+  /* USER CODE BEGIN Start_pump_Task */
+    /* Infinite loop */
+    for(;;)
+    {
+        /***主机的按键控制从机驱动LED亮灭的实验***/
+//        if(key_status == 1 || key_status == 0)//灭灯的状态
+//        {
+//            if(modbus.Host_time_flag_06)
+//            {
+//                Host_write06_slave(0x01,0x06,0x0003,0x0033);//参数1从机地址，参数2起始地址，参数3寄存器个数,功能函数的末尾带了一个发送完毕的标志位置1的语句。
+//                if(modbus.Host_send_flag_06)
+//                {
+//                    modbus.Host_Sendtime_06 = 0;//发送完毕后计数清零（距离上次的时间）
+//                    modbus.Host_time_flag_06 = 0;//发送数据标志位清零
+//                    modbus.Host_send_flag_06 = 0;//清空发送结束数据标志位
+//                    Host_Func6();//从机返回数据处理
+//                }
+//            }
+//        }
+
+//        else if(key_status == 2 )//亮灯的状态
+//        {
+//            if(modbus.Host_time_flag_06)
+//            {
+//                Host_write06_slave(0x01,0x06,0x0003,0x0034);//参数1从机地址，参数2起始地址，参数3寄存器个数,功能函数的末尾带了一个发送完毕的标志位置1的语句。
+//                if(modbus.Host_send_flag_06)
+//                {
+//                    modbus.Host_Sendtime_06 = 0;//发送完毕后计数清零（距离上次的时间）
+//                    modbus.Host_time_flag_06 = 0;//发送数据标志位清零
+//                    modbus.Host_send_flag_06 = 0;//清空发送结束数据标志位
+//                    Host_Func6();//从机返回数据处理
+//                }
+//            }
+//        }
+		osDelay(100);
+    }
+  /* USER CODE END Start_pump_Task */
+}
+
+/* USER CODE BEGIN Header_Start_ConvertFloat_Task */
+/**
+* @brief Function implementing the ConvertFloat_Ta thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_Start_ConvertFloat_Task */
+void Start_ConvertFloat_Task(void const * argument)
+{
+  /* USER CODE BEGIN Start_ConvertFloat_Task */
+  /* Infinite loop */
+  float value = 0.00;
+  for(;;)
+  {
+	  value = DataConvertFloat(3);
+//	  printf("value的值是： %.2f",value);
+	  osDelay(1000);
+  }
+  /* USER CODE END Start_ConvertFloat_Task */
+}
+
+/* Private application code --------------------------------------------------*/
+/* USER CODE BEGIN Application */
+
+/* USER CODE END Application */
+
